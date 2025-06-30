@@ -67,8 +67,8 @@ function generateFlowElements(componente: Componente, x = 0, y = 0): LayoutResul
     };
   }
 
-  let allNodes: Node[] = [];
-  let allEdges: Edge[] = [];
+  const allNodes: Node[] = [];
+  const allEdges: Edge[] = [];
   let allEntryIds: string[] = [];
   let allExitIds: string[] = [];
   let width = 0;

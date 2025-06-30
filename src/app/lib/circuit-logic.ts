@@ -10,6 +10,7 @@ export interface Componente {
 
     calcular_resistencia(): number;
     definir_valores(params: { tensao_v?: number; corrente_a?: number }): void;
+    
     coletar_dados(): any[];
     gerar_passos_resolucao(): [string[], number, string];
 }
@@ -92,7 +93,7 @@ export class GrupoSerie extends BaseComponente {
     }
 
     gerar_passos_resolucao(): [string[], number, string] {
-        let passos_acumulados: string[] = [];
+        const passos_acumulados: string[] = [];
         const resistencias_filhos: number[] = [];
         const descricoes_filhos: string[] = [];
         this.componentes.forEach(comp => {
@@ -129,7 +130,7 @@ export class GrupoParalelo extends BaseComponente {
     }
 
     gerar_passos_resolucao(): [string[], number, string] {
-        let passos_acumulados: string[] = [];
+        const passos_acumulados: string[] = [];
         const resistencias_filhos: number[] = [];
         const descricoes_filhos: string[] = [];
         this.componentes.forEach(comp => {
