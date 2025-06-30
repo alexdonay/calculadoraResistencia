@@ -1,6 +1,18 @@
+// src/app/lib/circuit-logic.ts
+
 import { immerable } from 'immer';
+
+// Definindo um tipo específico para os dados coletados.
+type ComponentData = {
+    "Componente": string;
+    "Resistência (Ω)": string;
+    "Tensão (V)": string;
+    "Corrente (A)": string;
+    "Potência (W)": string;
+};
+
 export interface Componente {
-    id: string; // ID único para cada instância
+    id: string;
     identificador: string;
     tensao_v: number;
     corrente_a: number;
@@ -10,8 +22,7 @@ export interface Componente {
 
     calcular_resistencia(): number;
     definir_valores(params: { tensao_v?: number; corrente_a?: number }): void;
-    
-    coletar_dados(): any[];
+    coletar_dados(): ComponentData[]; // CORRIGIDO: de any[] para ComponentData[]
     gerar_passos_resolucao(): [string[], number, string];
 }
 
@@ -51,7 +62,7 @@ abstract class BaseComponente implements Componente {
     
     protected _propagar_valores(): void {}
     
-    coletar_dados(): any[] {
+    coletar_dados(): ComponentData[] { // CORRIGIDO: de any[] para ComponentData[]
         return this.componentes.flatMap(c => c.coletar_dados());
     }
 }
@@ -65,7 +76,7 @@ export class Resistor extends BaseComponente {
     
     calcular_resistencia(): number { return this.resistencia_ohm; }
     
-    coletar_dados(): any[] {
+    coletar_dados(): ComponentData[] { // CORRIGIDO: de any[] para ComponentData[]
         return [{
             "Componente": this.identificador,
             "Resistência (Ω)": this.resistencia_ohm.toFixed(2),
@@ -83,17 +94,11 @@ export class Resistor extends BaseComponente {
 
 export class GrupoSerie extends BaseComponente {
     constructor(identificador: string) { super(identificador); }
-
-    calcular_resistencia(): number {
-        return this.componentes.reduce((acc, comp) => acc + comp.calcular_resistencia(), 0);
-    }
-
-    protected _propagar_valores(): void {
-        this.componentes.forEach(comp => comp.definir_valores({ corrente_a: this.corrente_a }));
-    }
+    calcular_resistencia(): number { return this.componentes.reduce((acc, comp) => acc + comp.calcular_resistencia(), 0); }
+    protected _propagar_valores(): void { this.componentes.forEach(comp => comp.definir_valores({ corrente_a: this.corrente_a })); }
 
     gerar_passos_resolucao(): [string[], number, string] {
-        const passos_acumulados: string[] = [];
+        const passos_acumulados: string[] = []; // CORRIGIDO: de let para const
         const resistencias_filhos: number[] = [];
         const descricoes_filhos: string[] = [];
         this.componentes.forEach(comp => {
@@ -116,7 +121,6 @@ export class GrupoSerie extends BaseComponente {
 
 export class GrupoParalelo extends BaseComponente {
     constructor(identificador: string) { super(identificador); }
-
     calcular_resistencia(): number {
         const soma_inversos = this.componentes.reduce((acc, comp) => {
             const res = comp.calcular_resistencia();
@@ -124,13 +128,10 @@ export class GrupoParalelo extends BaseComponente {
         }, 0);
         return soma_inversos > 0 ? 1 / soma_inversos : 0;
     }
-
-    protected _propagar_valores(): void {
-        this.componentes.forEach(comp => comp.definir_valores({ tensao_v: this.tensao_v }));
-    }
+    protected _propagar_valores(): void { this.componentes.forEach(comp => comp.definir_valores({ tensao_v: this.tensao_v })); }
 
     gerar_passos_resolucao(): [string[], number, string] {
-        const passos_acumulados: string[] = [];
+        const passos_acumulados: string[] = []; // CORRIGIDO: de let para const
         const resistencias_filhos: number[] = [];
         const descricoes_filhos: string[] = [];
         this.componentes.forEach(comp => {
@@ -152,6 +153,7 @@ export class GrupoParalelo extends BaseComponente {
     }
 }
 
+// ... o resto do arquivo continua igual
 export class Circuito {
     tensao_fonte_v: number;
     componente_principal: Componente;
@@ -169,18 +171,16 @@ export class Circuito {
         const resistencia_total = this.componente_principal.calcular_resistencia();
         const corrente_total = resistencia_total > 0 ? this.tensao_fonte_v / resistencia_total : 0;
         const potencia_total = this.tensao_fonte_v * corrente_total;
-
         let texto = `--- Relatório do Circuito ---\n`;
         texto += `Tensão da Fonte: ${this.tensao_fonte_v.toFixed(2)} V\n`;
         texto += `Resistência Total: ${resistencia_total.toFixed(2)} Ω\n`;
         texto += `Corrente Total: ${corrente_total.toFixed(3)} A\n`;
         texto += `Potência Total: ${potencia_total.toFixed(2)} W\n\n`;
         texto += "--- Detalhes por Componente ---\n";
-        
-        const dados = this.componente_principal.coletar_dados();
+        const dados: ComponentData[] = this.componente_principal.coletar_dados();
         if (dados.length > 0) {
             const headers = Object.keys(dados[0]);
-            const rows = dados.map(row => headers.map(h => row[h]).join('\t'));
+            const rows = dados.map(row => headers.map(h => row[h as keyof ComponentData]).join('\t'));
             texto += headers.join('\t') + '\n';
             texto += rows.join('\n');
         } else {

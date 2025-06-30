@@ -1,10 +1,10 @@
 // src/app/page.tsx
 'use client';
 
-
 import { produce } from 'immer';
-import Papa from 'papaparse';
+import Papa, { ParseResult } from 'papaparse';
 import { ChangeEvent, useState } from 'react';
+
 import Diagrama from './components/Diagrama';
 import EstruturaCircuito from './components/EstruturaCircuito';
 import Ferramentas from './components/Ferramentas';
@@ -12,7 +12,7 @@ import Resultados from './components/Resultados';
 import TutorialModal from './components/TutorialModal';
 import { Circuito, Componente, GrupoParalelo, GrupoSerie, Resistor } from './lib/circuit-logic';
 
-// Função utilitária para encontrar um nó na árvore
+// --- Funções e Tipos Auxiliares ---
 const findNodeById = (node: Componente, id: string): { node: Componente, parent: Componente | null } | null => {
   if (node.id === id) return { node, parent: null };
   for (const child of node.componentes) {
@@ -25,6 +25,15 @@ const findNodeById = (node: Componente, id: string): { node: Componente, parent:
 
 let resistorCount = 0;
 let groupCount = 0;
+
+// Tipo para as linhas do CSV
+interface CsvRow {
+  id: string;
+  parent_id: string | null;
+  type: string;
+  identifier: string;
+  value: string | number;
+}
 
 export default function Home() {
   const [circuito, setCircuito] = useState<Componente>(new GrupoSerie("Circuito Principal"));
@@ -73,7 +82,7 @@ export default function Home() {
     updateCircuito(draft => {
       const result = findNodeById(draft, selectedNodeId);
       if (result && result.parent) {
-        result.parent.componentes = result.parent.componentes.filter((c: { id: string; }) => c.id !== selectedNodeId);
+        result.parent.componentes = result.parent.componentes.filter(c => c.id !== selectedNodeId);
       }
     });
     setSelectedNodeId(circuito.id);
@@ -81,32 +90,21 @@ export default function Home() {
 
   const handleResolver = () => {
     try {
-      // 1. Crie um novo estado "resolvido" executando a lógica de mutação DENTRO do produce.
-      // O 'draft' é um proxy mutável do nosso estado 'circuito'.
       const circuitoResolvido = produce(circuito, draft => {
-        // Passamos o draft para a nossa lógica existente, que pode agora
-        // modificar o rascunho de forma segura.
         const c = new Circuito(tensao, draft);
         c.resolver();
       });
-
-      // 2. Agora, use este novo objeto (que é imutável) para gerar os relatórios.
-      // Não estamos mais modificando nada, apenas lendo os resultados.
       const cReport = new Circuito(tensao, circuitoResolvido);
       setRelatorio(cReport.gerar_relatorio_texto());
       setTutorialText(cReport.gerar_tutorial_completo());
-
-      // 3. Mostra o modal do tutorial.
       setShowTutorial(true);
-
     } catch (e) {
       alert(`Erro ao resolver o circuito: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
-  // Funções de Import/Export
   const handleExport = () => {
-    const rows: any[] = [];
+    const rows: CsvRow[] = []; // CORRIGIDO: de any[] para CsvRow[]
     const collectData = (componente: Componente, parentId: string | null) => {
       rows.push({
         id: componente.id,
@@ -131,31 +129,27 @@ export default function Home() {
     Papa.parse(event.target.files[0], {
       header: true,
       skipEmptyLines: true,
-      complete: (results) => {
-        const data = results.data as any[];
-        const nodeMap = new Map<string, Componente & { id: string }>();
-        let rootNode: Componente | null = null;
+      complete: (results: ParseResult<CsvRow>) => { // CORRIGIDO: tipagem do results
+        const data = results.data; // Agora 'data' é inferido como CsvRow[]
+        const nodeMap = new Map<string, Componente>();
+        let rootNode: Componente | null = null; // Explicitly typed as Componente | null
 
         data.forEach(row => {
           let comp: Componente;
-          const id = row.id;
-          const identifier = row.identifier;
           if (row.type === 'Resistor') {
-            comp = new Resistor(identifier, Number(row.value));
+            comp = new Resistor(row.identifier, Number(row.value));
           } else if (row.type === 'GrupoSerie') {
-            comp = new GrupoSerie(identifier);
+            comp = new GrupoSerie(row.identifier);
           } else if (row.type === 'GrupoParalelo') {
-            comp = new GrupoParalelo(identifier);
-          } else {
-            return;
-          }
-          comp.id = id;
-          nodeMap.set(id, comp);
+            comp = new GrupoParalelo(row.identifier);
+          } else return;
+          comp.id = row.id;
+          nodeMap.set(row.id, comp);
         });
 
         data.forEach(row => {
           const parentId = row.parent_id;
-          if (parentId && nodeMap.has(parentId)) {
+          if (parentId && parentId !== 'null' && nodeMap.has(parentId)) {
             const parent = nodeMap.get(parentId)!;
             const child = nodeMap.get(row.id)!;
             parent.componentes.push(child);
@@ -166,10 +160,12 @@ export default function Home() {
 
         if (rootNode) {
           setCircuito(rootNode);
-          setSelectedNodeId((rootNode as Componente).id);
-        } else {
-          alert("Erro: Não foi possível encontrar o nó raiz no CSV.");
-        }
+          if (rootNode) {
+            if (rootNode) {
+              setSelectedNodeId(rootNode);
+            }
+          }
+        } else alert("Erro: Não foi possível encontrar o nó raiz no CSV.");
       }
     });
   };
@@ -177,17 +173,7 @@ export default function Home() {
   return (
     <div className="flex h-screen bg-gray-900 text-white font-sans">
       {showTutorial && <TutorialModal texto={tutorialText} onClose={() => setShowTutorial(false)} />}
-
-      <Ferramentas
-        onAddResistor={handleAddResistor}
-        onAddGrupoSerie={() => handleAddGrupo('serie')}
-        onAddGrupoParalelo={() => handleAddGrupo('paralelo')}
-        onDelete={handleDelete}
-        onImport={handleImport}
-        onExport={handleExport}
-        isNodeSelected={!!selectedNodeId}
-      />
-
+      <Ferramentas {...{ onAddResistor: handleAddResistor, onAddGrupoSerie: () => handleAddGrupo('serie'), onAddGrupoParalelo: () => handleAddGrupo('paralelo'), onDelete: handleDelete, onImport: handleImport, onExport: handleExport, isNodeSelected: !!selectedNodeId }} />
       <main className="flex-1 flex flex-col p-4 gap-4">
         <div className="flex-1 bg-gray-800 rounded-lg overflow-hidden min-h-0">
           <EstruturaCircuito circuito={circuito} selectedNodeId={selectedNodeId} onSelectNode={setSelectedNodeId} />
@@ -196,13 +182,7 @@ export default function Home() {
           <Diagrama circuito={circuito} />
         </div>
       </main>
-
-      <Resultados
-        tensao={tensao}
-        setTensao={setTensao}
-        onResolver={handleResolver}
-        relatorio={relatorio}
-      />
+      <Resultados {...{ tensao, setTensao, onResolver: handleResolver, relatorio }} />
     </div>
   );
 }
