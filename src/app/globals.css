@@ -1,0 +1,20 @@
+/* src/app/globals.css */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* * Estilos customizados para os nós do React Flow.
+ * Usamos a diretiva @apply do Tailwind para compor classes de utilidade.
+ * Estes estilos devem vir DEPOIS das três diretivas principais.
+*/
+.react-flow__node {
+    @apply bg-gray-800 border-2 border-gray-600 rounded-lg text-white text-center shadow-lg text-sm;
+    padding: 8px 15px;
+}
+
+/* Estilo para as "arestas" ou conexões entre os nós */
+.react-flow__edge-path {
+    @apply stroke-cyan-500;
+    stroke-width: 2;
+}
